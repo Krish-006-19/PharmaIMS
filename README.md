@@ -1,0 +1,1 @@
+https://pharmaims.netlify.app/
