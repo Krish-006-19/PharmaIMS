@@ -1,1 +1,1 @@
-https://pharmaims.netlify.app/
+<a href="https://pharmaims.netlify.app/">PharmaIMS</a>
