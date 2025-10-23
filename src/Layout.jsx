@@ -11,7 +11,7 @@ export default function Layout({ setCurrentPage, children }) {
         <nav className="flex-1 p-4 space-y-2">
           <button onClick={() => setCurrentPage("medicines")} className="w-full px-4 py-2 text-left hover:bg-blue-50 rounded-lg">📦 Medicines</button>
           <button onClick={() => setCurrentPage("suppliers")} className="w-full px-4 py-2 text-left hover:bg-blue-50 rounded-lg">🏭 Suppliers</button>
-          <button onClick={() => setCurrentPage("customers")} className="w-full px-4 py-2 text-left hover:bg-blue-50 rounded-lg">👨‍⚕️ Customers</button>
+          <button onClick={() => setCurrentPage("pharmacies")} className="w-full px-4 py-2 text-left hover:bg-blue-50 rounded-lg">🏥 Pharmacies</button>
           <button onClick={() => setCurrentPage("sales")} className="w-full px-4 py-2 text-left hover:bg-blue-50 rounded-lg">🧾 Sales</button>
           <button onClick={() => setCurrentPage("alerts")} className="w-full px-4 py-2 text-left hover:bg-blue-50 rounded-lg">⚠️ Alerts</button>
           <button onClick={() => setCurrentPage("reports")} className="w-full px-4 py-2 text-left hover:bg-blue-50 rounded-lg">📊 Reports</button>

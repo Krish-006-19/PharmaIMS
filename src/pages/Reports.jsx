@@ -4,7 +4,7 @@ export default function Reports() {
   // Normally you'd pull these numbers from state or backend
   const totalMedicines = 15;
   const totalSuppliers = 4;
-  const totalCustomers = 20;
+  const totalPharmacies = 20;
   const totalSales = 57;
 
   return (
@@ -22,8 +22,8 @@ export default function Reports() {
           <p className="text-2xl font-bold text-green-700">{totalSuppliers}</p>
         </div>
         <div className="bg-yellow-50 p-4 rounded shadow text-center">
-          <h3 className="text-gray-600 text-sm">Customers</h3>
-          <p className="text-2xl font-bold text-yellow-700">{totalCustomers}</p>
+          <h3 className="text-gray-600 text-sm">Pharmacies</h3>
+          <p className="text-2xl font-bold text-yellow-700">{totalPharmacies}</p>
         </div>
         <div className="bg-purple-50 p-4 rounded shadow text-center">
           <h3 className="text-gray-600 text-sm">Total Sales</h3>

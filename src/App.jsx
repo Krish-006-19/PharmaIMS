@@ -3,7 +3,7 @@ import { Routes, Route, Link } from "react-router-dom";
 
 import Medicines from "./pages/Medicines";
 import Suppliers from "./pages/Suppliers";
-import Customers from "./pages/Customers";
+import Pharmacies from "./pages/Pharmacies";
 import Sales from "./pages/Sales";
 import Alerts from "./pages/Alerts";
 import Reports from "./pages/Reports";
@@ -29,10 +29,10 @@ export default function App() {
             🏭 Suppliers
           </Link>
           <Link
-            to="/customers"
+            to="/pharmacies"
             className="block px-4 py-2 text-gray-700 hover:bg-blue-50 hover:text-blue-600 rounded-lg"
           >
-            👨‍⚕️ Customers
+            🏥 Pharmacies
           </Link>
           <Link
             to="/sales"
@@ -40,18 +40,18 @@ export default function App() {
           >
             🧾 Sales
           </Link>
-          <Link
+          {/* <Link
             to="/alerts"
             className="block px-4 py-2 text-gray-700 hover:bg-blue-50 hover:text-blue-600 rounded-lg"
           >
             ⚠️ Alerts
-          </Link>
-          <Link
+          </Link> */}
+          {/* <Link
             to="/reports"
             className="block px-4 py-2 text-gray-700 hover:bg-blue-50 hover:text-blue-600 rounded-lg"
           >
             📊 Reports
-          </Link>
+          </Link> */}
         </nav>
         <div className="p-4 border-t text-sm text-gray-500">© 2025 PharmaIMS</div>
       </aside>
@@ -68,7 +68,7 @@ export default function App() {
           <Routes>
             <Route path="/" element={<Medicines />} />
             <Route path="/suppliers" element={<Suppliers />} />
-            <Route path="/customers" element={<Customers />} />
+            <Route path="/pharmacies" element={<Pharmacies />} />
             <Route path="/sales" element={<Sales />} />
             <Route path="/alerts" element={<Alerts />} />
             <Route path="/reports" element={<Reports />} />

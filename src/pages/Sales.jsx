@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { Bar } from "react-chartjs-2";
 import {
   Chart as ChartJS,
@@ -13,21 +13,43 @@ import {
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
 
 export default function Sales() {
-  const [sales, setSales] = useState([
-    { item: "Paracetamol", qty: 2, customer: "Dr. Sharma" },
-    { item: "Amoxicillin", qty: 1, customer: "Patient Gupta" },
-  ]);
-  const [form, setForm] = useState({ item: "", qty: "", customer: "" });
+  importLocalApi: true;
+  const [orders, setOrders] = useState([]);
+  const [suppliers, setSuppliers] = useState([]);
+  const [medicines, setMedicines] = useState([]);
+  const [selectedSupplier, setSelectedSupplier] = useState("");
 
-  const addSale = () => {
-    if (!form.item || !form.qty || !form.customer) return;
-    setSales([...sales, { ...form, qty: Number(form.qty) }]);
-    setForm({ item: "", qty: "", customer: "" });
-  };
+  useEffect(() => { fetchAll(); }, []);
 
-  // Aggregate data for chart
-  const itemSales = sales.reduce((acc, s) => {
-    acc[s.item] = (acc[s.item] || 0) + s.qty;
+  async function fetchAll() {
+    const localApi = await import('../lib/localApi');
+    const [os, ss, ms] = await Promise.all([localApi.getOrders(), localApi.getSuppliers(), localApi.getMedicines()]);
+    setOrders(os || []);
+    setSuppliers(ss || []);
+    setMedicines(ms || []);
+  }
+
+  // Build viewable sales rows from orders. We treat supplier-related confirmed orders as sales for that supplier.
+  const visibleOrders = orders.filter(o => {
+    if (!selectedSupplier) return true;
+    // treat orders where receivedFrom === supplierId as supplier's sales/orders
+    return o.receivedFrom === selectedSupplier;
+  });
+
+  const salesRows = visibleOrders
+    .filter(o => o.status === 'confirmed' || o.orderType === 'supplierConfirmed' || o.orderType === 'sale')
+    .flatMap(o => (o.medicines || []).map(it => ({
+      orderId: o._id,
+      medicineId: it.medicine,
+      quantity: Number(it.quantity || 0),
+      pharmacy: o.pharmacy,
+      supplier: o.receivedFrom,
+      date: o.orderDate,
+    })));
+
+  const itemSales = salesRows.reduce((acc, s) => {
+    const name = (medicines.find(m => m._id === s.medicineId) || {}).name || s.medicineId;
+    acc[name] = (acc[name] || 0) + (s.quantity || 0);
     return acc;
   }, {});
 
@@ -46,42 +68,26 @@ export default function Sales() {
     <section className="bg-white rounded-lg shadow p-6">
       <h2 className="text-lg font-semibold mb-4">🧾 Sales & Billing Dashboard</h2>
 
-      {/* Add Sale Form */}
-      <div className="flex gap-2 mb-4">
-        <input
-          type="text"
-          placeholder="Medicine"
-          value={form.item}
-          onChange={(e) => setForm({ ...form, item: e.target.value })}
-          className="border p-1 rounded"
-        />
-        <input
-          type="number"
-          placeholder="Qty"
-          value={form.qty}
-          onChange={(e) => setForm({ ...form, qty: e.target.value })}
-          className="border p-1 rounded w-20"
-        />
-        <input
-          type="text"
-          placeholder="Customer"
-          value={form.customer}
-          onChange={(e) => setForm({ ...form, customer: e.target.value })}
-          className="border p-1 rounded"
-        />
-        <button
-          onClick={addSale}
-          className="bg-blue-600 text-white px-3 py-1 rounded"
-        >
-          + Add
-        </button>
+      {/* Supplier filter */}
+      <div className="flex items-center gap-3 mb-4">
+        <label className="text-sm text-gray-600">View as supplier:</label>
+        {suppliers.length > 0 ? (
+          <select value={selectedSupplier} onChange={e => setSelectedSupplier(e.target.value)} className="border p-1 rounded">
+            <option value="">All suppliers / admin view</option>
+            {suppliers.map(s => <option key={s._id} value={s._id}>{s.name} — {s._id}</option>)}
+          </select>
+        ) : (
+          <input placeholder="Supplier id (optional)" value={selectedSupplier} onChange={e => setSelectedSupplier(e.target.value)} className="border p-1 rounded" />
+        )}
       </div>
 
-      {/* Sales List */}
+      {/* Sales List (derived from confirmed supplier orders) */}
       <ul className="space-y-2 mb-6">
-        {sales.map((s, i) => (
+        {salesRows.length === 0 && <li className="text-gray-500">No sales/orders found for the selected supplier.</li>}
+        {salesRows.map((s, i) => (
           <li key={i} className="border p-2 rounded text-gray-700">
-            {s.item} x {s.qty} → {s.customer}
+            {(medicines.find(m => m._id === s.medicineId) || {}).name || s.medicineId} x {s.quantity} → Pharmacy: {s.pharmacy}
+            <div className="text-xs text-gray-500">Date: {s.date ? new Date(s.date).toLocaleString() : '-'}</div>
           </li>
         ))}
       </ul>
