@@ -120,10 +120,10 @@ export default function App() {
           <h1 className="text-xl font-semibold text-gray-800">
             Pharmaceutical Inventory Management
           </h1>
-          <div className="flex items-center gap-3">
+          {/* <div className="flex items-center gap-3">
             <button onClick={seedDemo} disabled={seeding} className="px-3 py-1 bg-blue-600 text-white rounded disabled:opacity-60">{seeding ? 'Seeding…' : 'Seed demo data'}</button>
             <div className="text-gray-600 text-sm">Admin</div>
-          </div>
+          </div> */}
         </header>
 
         <main className="flex-1 p-6 overflow-y-auto">
