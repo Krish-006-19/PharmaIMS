@@ -2,12 +2,6 @@ import React, { useEffect, useState } from "react";
 import axios from 'axios';
 import { demo } from '../lib/demoData';
 
-// Assumes backend routes for medicines are mounted under /api/medicines
-// GET    /api/medicines         -> list
-// GET    /api/medicines/:id     -> single
-// POST   /api/medicines/:ownerId -> create (owner-specific - supplier or pharmacy)
-// PUT    /api/medicines/:id     -> update
-
 export default function Medicines() {
   const [medicines, setMedicines] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -15,14 +9,13 @@ export default function Medicines() {
   const [orders, setOrders] = useState([]);
   const [ordersLoading, setOrdersLoading] = useState(false);
 
-  // form fields match the medicine schema
   const [form, setForm] = useState({
     name: "",
     price: "",
     stockAvailable: "",
     manufactureDate: "",
     expiryDate: "",
-    supplierId: "", // UI requirement: select a registered supplier
+    supplierId: "", 
   });
 
   const [fieldErrors, setFieldErrors] = useState({});
@@ -44,7 +37,6 @@ export default function Medicines() {
       setMedicines(data || []);
     } catch (err) {
       if (err?.response?.status === 404) {
-        // Fallback to demo data when backend route is unavailable
         setMedicines(demo.medicines);
       } else {
         console.error(err);
@@ -55,7 +47,6 @@ export default function Medicines() {
     }
   }
 
-  // fetch suppliers for the dropdown
   async function fetchSuppliersList() {
     try {
       const res = await axios.get('https://pharmacy-proj-1.onrender.com/supplier');
@@ -65,7 +56,6 @@ export default function Medicines() {
     }
   }
 
-  // determine a default pharmacy to post the medicine under (backend requires a pharmacy id)
   async function fetchDefaultPharmacy() {
     try {
       const res = await axios.get('https://pharmacy-proj-1.onrender.com/pharmacy');
@@ -82,7 +72,6 @@ export default function Medicines() {
 
   useEffect(() => { fetchSuppliersList(); fetchDefaultPharmacy(); }, []);
 
-  // Orders: fetch and live-refresh when order is placed
   useEffect(() => {
     fetchOrders();
     function onPlaced() { fetchOrders(); }
@@ -180,7 +169,6 @@ export default function Medicines() {
       stockAvailable: med.stockAvailable ?? "",
       manufactureDate: med.manufactureDate ? med.manufactureDate.split("T")[0] : "",
       expiryDate: med.expiryDate ? med.expiryDate.split("T")[0] : "",
-  // supplierId is only used for UI selection when creating; keep empty while editing
   supplierId: "",
     });
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -195,7 +183,6 @@ export default function Medicines() {
 
       {error && <div className="mb-3 text-red-600">{error}</div>}
 
-      {/* Add / Edit form */}
       <div className="grid grid-cols-1 md:grid-cols-6 gap-2 mb-4">
         <div className="md:col-span-2">
           <input
@@ -243,7 +230,6 @@ export default function Medicines() {
           {fieldErrors.price && <div className="text-red-600 text-sm">{fieldErrors.price}</div>}
         </div>
 
-  {/* supplierId only for create --- hidden on edit */}
         {!editingId && (
           <div className="md:col-span-2 space-y-1">
             {suppliers.length > 0 ? (
@@ -286,7 +272,6 @@ export default function Medicines() {
         </div>
       </div>
 
-      {/* Medicines table */}
       <div className="overflow-x-auto">
         <table className="w-full border border-gray-200 text-sm">
           <thead className="bg-gray-50">
@@ -325,7 +310,6 @@ export default function Medicines() {
         </table>
       </div>
 
-      {/* Orders table with Supplier column */}
       <div className="mt-6">
         <h3 className="font-semibold mb-2">Recent Orders</h3>
         {ordersLoading && <div className="text-sm text-gray-500">Loading orders…</div>}
