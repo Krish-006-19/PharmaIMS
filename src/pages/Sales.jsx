@@ -25,7 +25,6 @@ export default function Sales() {
 
   useEffect(() => { fetchInitialData(); }, []);
 
-  // Refresh when an order is placed elsewhere in the app
   useEffect(() => {
     function onPlaced() {
       fetchOrders(pharmacyId);
@@ -35,7 +34,6 @@ export default function Sales() {
   }, [pharmacyId]);
 
   async function fetchInitialData() {
-    // Load suppliers and medicines once; orders are fetched via fetchOrders()
     try {
       const [sRes, mRes] = await Promise.all([
         axios.get('https://pharmacy-proj-1.onrender.com/supplier'),
@@ -45,12 +43,10 @@ export default function Sales() {
       const medicinesRaw = Array.isArray(mRes.data?.data) ? mRes.data.data : (Array.isArray(mRes.data) ? mRes.data : []);
       setMedicines(medicinesRaw || []);
     } catch (err) {
-      // fallbacks for demo
       console.warn('Failed to load suppliers/medicines, using demo if available', err);
       if (!suppliers?.length && demo?.suppliers) setSuppliers(demo.suppliers);
       if (!medicines?.length && demo?.medicines) setMedicines(demo.medicines);
     } finally {
-      // load initial orders (all)
       fetchOrders("");
     }
   }
@@ -91,21 +87,16 @@ export default function Sales() {
       setLoading(false);
     }
   }
-
-  // Build viewable sales rows
-  // If pharmacyId is provided: show that pharmacy's orders (all statuses)
-  // Else: supplier view like before (confirmed/sales only, optional supplier filter)
   const baseOrders = (() => {
     if (pharmacyId && /^([0-9a-fA-F]{24})$/.test(pharmacyId)) {
       return orders.filter(o => o.pharmacy === pharmacyId);
     }
-    // supplier/admin view
     return orders.filter(o => !selectedSupplier || o.receivedFrom === selectedSupplier);
   })();
 
   const salesRows = baseOrders
     .filter(o => {
-      if (pharmacyId && /^([0-9a-fA-F]{24})$/.test(pharmacyId)) return true; // include all statuses for pharmacy view
+      if (pharmacyId && /^([0-9a-fA-F]{24})$/.test(pharmacyId)) return true; 
       return o.status === 'confirmed' || o.orderType === 'supplierConfirmed' || o.orderType === 'sale';
     })
     .flatMap(o => (o.medicines || []).map(it => ({
@@ -139,7 +130,6 @@ export default function Sales() {
     <section className="bg-white rounded-lg shadow p-6">
       <h2 className="text-lg font-semibold mb-4">🧾 Sales & Billing Dashboard</h2>
 
-      {/* Pharmacy or Supplier filter */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
         <div className="flex items-center gap-2">
           <label className="text-sm text-gray-600">View for pharmacy:</label>
@@ -168,7 +158,6 @@ export default function Sales() {
       {loading && <div className="mb-2 text-sm text-gray-500">Loading orders…</div>}
       {error && <div className="mb-2 text-sm text-red-600">{error}</div>}
 
-      {/* Sales/Orders List */}
       <ul className="space-y-2 mb-6">
         {salesRows.length === 0 && (
           <li className="text-gray-500">
@@ -183,7 +172,6 @@ export default function Sales() {
         ))}
       </ul>
 
-      {/* Chart */}
       <div className="bg-gray-50 p-4 rounded">
         <h3 className="text-md font-semibold mb-2">📊 {pharmacyId ? 'Orders by Medicine (Pharmacy view)' : 'Sales by Medicine'}</h3>
         <Bar data={chartData} />
