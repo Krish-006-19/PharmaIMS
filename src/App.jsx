@@ -14,7 +14,6 @@ export default function App() {
     if (seeding) return;
     setSeeding(true);
     try {
-      // 1) Create a supplier
       const supRes = await axios.post('https://pharmacy-proj-1.onrender.com/supplier', {
         name: 'Demo Supplier',
         phone: '9998887777',
@@ -23,7 +22,6 @@ export default function App() {
       });
       const supplier = supRes.data?.data || supRes.data;
 
-      // 2) Create a pharmacy (requires /pharmacy to be mounted on backend)
       const phRes = await axios.post('https://pharmacy-proj-1.onrender.com/pharmacy', {
         name: 'Demo Pharmacy',
         phone: '8887776666',
@@ -31,7 +29,6 @@ export default function App() {
       });
       const pharmacy = phRes.data?.data || phRes.data;
 
-      // 3) Create a couple of medicines under this pharmacy
       const m1Res = await axios.post(`https://pharmacy-proj-1.onrender.com/medicine/${pharmacy._id}`, {
         name: 'Paracetamol 500mg', price: 30, stockAvailable: 100,
         manufactureDate: new Date(Date.now() - 1000*60*60*24*60).toISOString(),
@@ -45,7 +42,6 @@ export default function App() {
       const med1 = m1Res.data?.data || m1Res.data;
       const med2 = m2Res.data?.data || m2Res.data;
 
-      // 4) Place an order from pharmacy to supplier
       const orderRes = await axios.post(`https://pharmacy-proj-1.onrender.com/order/placeOrder/${pharmacy._id}/${supplier._id}`, {
         medicines: [
           { medicine: med1._id, quantity: 15 },
@@ -54,7 +50,6 @@ export default function App() {
       });
       const order = orderRes.data?.data || orderRes.data;
 
-      // 5) Supplier accepts the order (adds stock)
       await axios.put(`https://pharmacy-proj-1.onrender.com/supplier/${supplier._id}/order`, {
         orderId: order._id,
         action: 'accept',
@@ -99,18 +94,6 @@ export default function App() {
           >
             🧾 Sales
           </Link>
-          {/* <Link
-            to="/alerts"
-            className="block px-4 py-2 text-gray-700 hover:bg-blue-50 hover:text-blue-600 rounded-lg"
-          >
-            ⚠️ Alerts
-          </Link> */}
-          {/* <Link
-            to="/reports"
-            className="block px-4 py-2 text-gray-700 hover:bg-blue-50 hover:text-blue-600 rounded-lg"
-          >
-            📊 Reports
-          </Link> */}
         </nav>
         <div className="p-4 border-t text-sm text-gray-500">© 2025 PharmaIMS</div>
       </aside>
@@ -120,10 +103,6 @@ export default function App() {
           <h1 className="text-xl font-semibold text-gray-800">
             Pharmaceutical Inventory Management
           </h1>
-          {/* <div className="flex items-center gap-3">
-            <button onClick={seedDemo} disabled={seeding} className="px-3 py-1 bg-blue-600 text-white rounded disabled:opacity-60">{seeding ? 'Seeding…' : 'Seed demo data'}</button>
-            <div className="text-gray-600 text-sm">Admin</div>
-          </div> */}
         </header>
 
         <main className="flex-1 p-6 overflow-y-auto">
