@@ -3,7 +3,6 @@ import React from "react";
 export default function Layout({ setCurrentPage, children }) {
   return (
     <div className="flex h-screen bg-gray-100">
-      {/* Sidebar */}
       <aside className="w-64 bg-white shadow-lg flex flex-col">
         <div className="p-4 text-center font-bold text-xl text-blue-700 border-b">
           PharmaIMS
@@ -19,8 +18,7 @@ export default function Layout({ setCurrentPage, children }) {
         <div className="p-4 border-t text-sm text-gray-500">© 2025 PharmaIMS</div>
       </aside>
 
-      {/* Main */}
-      <div className="flex-1 flex flex-col">
+  <div className="flex-1 flex flex-col">
         <header className="bg-white shadow px-6 py-4 flex justify-between items-center">
           <h1 className="text-xl font-semibold text-gray-800">
             Pharmaceutical Inventory Management
