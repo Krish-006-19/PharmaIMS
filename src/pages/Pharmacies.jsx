@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import * as localApi from '../lib/localApi';
+import axios from 'axios';
+import { demo } from '../lib/demoData';
 
 // Pharmacies UI — replaces former Customers page
 // - list pharmacies (GET /api/pharmacies)
@@ -11,10 +12,12 @@ export default function Pharmacies() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
+  // Schema-aligned pharmacy form
+  // address is a required string (not an object)
   const [form, setForm] = useState({
     name: '',
     phone: '',
-    address: { street: '', city: '', state: '', pincode: '' },
+    address: '',
   });
   const [fieldErrors, setFieldErrors] = useState({});
 
@@ -35,27 +38,31 @@ export default function Pharmacies() {
     setLoading(true);
     setError('');
     try {
-      const data = await localApi.getPharmacies();
-      setPharmacies(data || []);
+      const res = await axios.get('https://pharmacy-proj-1.onrender.com/pharmacy');
+      setPharmacies(res.data?.data || []);
     } catch (err) {
-      console.error(err);
-      setError('Could not load pharmacies');
+      if (err?.response?.status === 404) {
+        setPharmacies(demo.pharmacies);
+      } else {
+        console.error(err);
+        setError('Could not load pharmacies');
+      }
     } finally { setLoading(false); }
   }
 
   async function fetchSuppliers() {
-    try { const p = await localApi.getSuppliers(); setSuppliers(p || []); } catch (e) { }
+    try { const res = await axios.get('https://pharmacy-proj-1.onrender.com/supplier'); setSuppliers(res.data?.data || []); } catch (err) { if (err?.response?.status === 404) setSuppliers(demo.suppliers); else console.warn('Failed to load suppliers', err); }
   }
 
   async function fetchMedicines() {
-    try { const p = await localApi.getMedicines(); setMedicines(p || []); } catch (e) { }
+    try { const res = await axios.get('https://pharmacy-proj-1.onrender.com/medicine'); const list = Array.isArray(res.data?.data) ? res.data.data : (Array.isArray(res.data) ? res.data : []); setMedicines(list || []); } catch (err) { if (err?.response?.status === 404) setMedicines(demo.medicines); else console.warn('Failed to load medicines', err); }
   }
 
   function validateForm() {
     const errs = {};
     if (!form.name || String(form.name).trim().length < 2) errs.name = 'Name is required (min 2 chars)';
     if (!/^\d{10}$/.test(String(form.phone || ''))) errs.phone = 'Phone must be 10 digits';
-    if (form.address.pincode && !/^\d{4,6}$/.test(form.address.pincode)) errs.pincode = 'Pincode should be 4-6 digits';
+    if (!form.address || String(form.address).trim().length < 3) errs.address = 'Address is required';
     setFieldErrors(errs);
     return Object.keys(errs).length === 0;
   }
@@ -64,9 +71,10 @@ export default function Pharmacies() {
     if (!validateForm()) return setError('Please fix form errors');
     setError('');
     try {
-      const p = await localApi.createPharmacy(form);
+      const res = await axios.post('https://pharmacy-proj-1.onrender.com/pharmacy', form);
+      const p = res.data?.data || res.data;
       setPharmacies((s) => [p, ...s]);
-      setForm({ name: '', phone: '', address: { street: '', city: '', state: '', pincode: '' } });
+      setForm({ name: '', phone: '', address: '' });
       setFieldErrors({});
     } catch (err) { console.error(err); setError(err.message || 'Server error'); }
   }
@@ -97,9 +105,18 @@ export default function Pharmacies() {
     if (v) return alert(v);
     setPlacingOrder(true);
     try {
-      const payload = { receivedFrom: selectedSupplier, medicines: orderRows.map(r => ({ medicine: r.medicine, quantity: Number(r.quantity) })) };
-      const result = await localApi.placePharmacyOrder(orderModal.pharmacyId, payload);
+      const payload = { medicines: orderRows.map(r => ({ medicine: r.medicine, quantity: Number(r.quantity) })) };
+      // supplier present -> use /order/placeOrder/:pharmacyId/:supplierId
+      if (selectedSupplier) {
+        await axios.post(`https://pharmacy-proj-1.onrender.com/order/placeOrder/${orderModal.pharmacyId}/${selectedSupplier}`, payload);
+      } else {
+        await axios.post(`https://pharmacy-proj-1.onrender.com/pharmacy/${orderModal.pharmacyId}/order`, payload);
+      }
       alert('Order placed');
+      // broadcast to other pages so they can refresh views
+      try {
+        window.dispatchEvent(new CustomEvent('order:placed', { detail: { pharmacyId: orderModal.pharmacyId, supplierId: selectedSupplier || null } }));
+      } catch {}
       setOrderModal({ open: false, pharmacyId: null });
       // refresh history for this pharmacy if visible
       if (orderModal.pharmacyId) fetchPharmacyHistory(orderModal.pharmacyId);
@@ -112,11 +129,24 @@ export default function Pharmacies() {
     setHistoryLoading(true);
     setHistoryPharmacyId(pharmacyId);
     try {
-      const data = await localApi.getPharmacyHistory(pharmacyId);
-      setPharmacyHistory(data || []);
+      const res = await axios.get(`https://pharmacy-proj-1.onrender.com/pharmacy/${pharmacyId}/history`);
+      const list = Array.isArray(res.data?.data) ? res.data.data : [];
+      // flatten ids in case server populates
+      const flat = list.map(o => ({
+        ...o,
+        pharmacy: typeof o.pharmacy === 'object' ? o.pharmacy?._id : o.pharmacy,
+        receivedFrom: typeof o.receivedFrom === 'object' ? o.receivedFrom?._id : o.receivedFrom,
+        medicines: (o.medicines||[]).map(mi => ({ medicine: typeof mi.medicine === 'object' ? mi.medicine?._id : mi.medicine, quantity: mi.quantity }))
+      }));
+      setPharmacyHistory(flat || []);
     } catch (err) {
-      console.error(err);
-      setPharmacyHistory([]);
+      if (err?.response?.status === 404) {
+        const flat = (demo.orders || []).filter(o => o.pharmacy === pharmacyId);
+        setPharmacyHistory(flat);
+      } else {
+        console.error(err);
+        setPharmacyHistory([]);
+      }
     } finally {
       setHistoryLoading(false);
     }
@@ -142,15 +172,12 @@ export default function Pharmacies() {
         </div>
         <div className="md:col-span-2 flex gap-2">
           <button onClick={createPharmacy} className="bg-blue-600 text-white px-3 py-1 rounded">+ Add</button>
-          <button onClick={() => setForm({ name: '', phone: '', address: { street: '', city: '', state: '', pincode: '' } })} className="border px-3 py-1 rounded">Clear</button>
+          <button onClick={() => setForm({ name: '', phone: '', address: '' })} className="border px-3 py-1 rounded">Clear</button>
         </div>
-
-        <input className="border p-1 rounded md:col-span-3" placeholder="Street" value={form.address.street} onChange={(e) => setForm({ ...form, address: { ...form.address, street: e.target.value } })} />
-        <input className="border p-1 rounded md:col-span-2" placeholder="City" value={form.address.city} onChange={(e) => setForm({ ...form, address: { ...form.address, city: e.target.value } })} />
-        <input className="border p-1 rounded md:col-span-1" placeholder="State" value={form.address.state} onChange={(e) => setForm({ ...form, address: { ...form.address, state: e.target.value } })} />
-        <div className="md:col-span-1">
-          <input className="border p-1 rounded w-full" placeholder="Pincode" value={form.address.pincode} onChange={(e) => setForm({ ...form, address: { ...form.address, pincode: e.target.value } })} />
-          {fieldErrors.pincode && <div className="text-red-600 text-sm">{fieldErrors.pincode}</div>}
+        {/* Schema-aligned single address field */}
+        <div className="md:col-span-4">
+          <input className="border p-1 rounded w-full" placeholder="Address (single line)" value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} />
+          {fieldErrors.address && <div className="text-red-600 text-sm">{fieldErrors.address}</div>}
         </div>
       </div>
 
@@ -160,7 +187,7 @@ export default function Pharmacies() {
             <li key={p._id} className="py-3 flex justify-between items-center">
               <div>
                 <div className="font-medium">{p.name}</div>
-                <div className="text-sm text-gray-600">{p.phone} • {p.address?.city || ''}</div>
+                <div className="text-sm text-gray-600">{p.phone} • {typeof p.address === 'string' ? p.address : ''}</div>
               </div>
               <div className="flex gap-2">
                 <button onClick={() => openOrder(p._id)} className="px-2 py-1 border rounded text-sm">Place demand</button>

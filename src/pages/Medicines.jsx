@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
-import * as localApi from '../lib/localApi';
+import axios from 'axios';
+import { demo } from '../lib/demoData';
 
 // Assumes backend routes for medicines are mounted under /api/medicines
 // GET    /api/medicines         -> list
@@ -11,6 +12,8 @@ export default function Medicines() {
   const [medicines, setMedicines] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [orders, setOrders] = useState([]);
+  const [ordersLoading, setOrdersLoading] = useState(false);
 
   // form fields match the medicine schema
   const [form, setForm] = useState({
@@ -19,11 +22,12 @@ export default function Medicines() {
     stockAvailable: "",
     manufactureDate: "",
     expiryDate: "",
-    supplierId: "", // replaced pharmacy select with supplier select
+    supplierId: "", // UI requirement: select a registered supplier
   });
 
   const [fieldErrors, setFieldErrors] = useState({});
   const [suppliers, setSuppliers] = useState([]);
+  const [defaultPharmacyId, setDefaultPharmacyId] = useState("");
 
   const [editingId, setEditingId] = useState(null);
 
@@ -35,30 +39,84 @@ export default function Medicines() {
     setLoading(true);
     setError("");
     try {
-      const data = await localApi.getMedicines();
+      const res = await axios.get('https://pharmacy-proj-1.onrender.com/medicine');
+      const data = Array.isArray(res.data?.data) ? res.data.data : (Array.isArray(res.data) ? res.data : []);
       setMedicines(data || []);
     } catch (err) {
-      console.error(err);
-      setError("Could not load medicines");
+      if (err?.response?.status === 404) {
+        // Fallback to demo data when backend route is unavailable
+        setMedicines(demo.medicines);
+      } else {
+        console.error(err);
+        setError("Could not load medicines");
+      }
     } finally {
       setLoading(false);
     }
   }
 
-  // fetch suppliers to provide a dropdown instead of typing IDs
+  // fetch suppliers for the dropdown
   async function fetchSuppliersList() {
     try {
-      const data = await localApi.getSuppliers();
-      setSuppliers(data || []);
+      const res = await axios.get('https://pharmacy-proj-1.onrender.com/supplier');
+      setSuppliers(res.data?.data || []);
     } catch (err) {
-      console.warn('Could not load suppliers for selection', err);
+      if (err?.response?.status === 404) setSuppliers(demo.suppliers); else console.warn('Could not load suppliers for selection', err);
     }
   }
 
-  useEffect(() => { fetchSuppliersList(); }, []);
+  // determine a default pharmacy to post the medicine under (backend requires a pharmacy id)
+  async function fetchDefaultPharmacy() {
+    try {
+      const res = await axios.get('https://pharmacy-proj-1.onrender.com/pharmacy');
+      const list = res.data?.data || [];
+      if (list.length > 0) setDefaultPharmacyId(list[0]._id);
+    } catch (err) {
+      if (err?.response?.status === 404) {
+        if ((demo.pharmacies || []).length > 0) setDefaultPharmacyId(demo.pharmacies[0]._id);
+      } else {
+        console.warn('Could not determine default pharmacy', err);
+      }
+    }
+  }
+
+  useEffect(() => { fetchSuppliersList(); fetchDefaultPharmacy(); }, []);
+
+  // Orders: fetch and live-refresh when order is placed
+  useEffect(() => {
+    fetchOrders();
+    function onPlaced() { fetchOrders(); }
+    window.addEventListener('order:placed', onPlaced);
+    return () => window.removeEventListener('order:placed', onPlaced);
+  }, []);
+
+  async function fetchOrders() {
+    setOrdersLoading(true);
+    try {
+      const res = await axios.get('https://pharmacy-proj-1.onrender.com/order');
+      const raw = Array.isArray(res.data?.orders) ? res.data.orders : (Array.isArray(res.data?.data) ? res.data.data : []);
+      const normalizeId = (v) => (typeof v === 'object' && v?._id) ? v._id : v;
+      const flat = (raw || []).map(o => ({
+        ...o,
+        pharmacy: normalizeId(o.pharmacy),
+        receivedFrom: normalizeId(o.receivedFrom),
+        medicines: (o.medicines||[]).map(mi => ({ medicine: normalizeId(mi.medicine), quantity: Number(mi.quantity||0) }))
+      }));
+      setOrders(flat);
+    } catch (err) {
+      if (err?.response?.status === 404) {
+        setOrders(demo.orders || []);
+      } else {
+        console.warn('Failed to load orders', err);
+        setOrders([]);
+      }
+    } finally {
+      setOrdersLoading(false);
+    }
+  }
 
   function resetForm() {
-    setForm({ name: "", price: "", stockAvailable: "", manufactureDate: "", expiryDate: "", supplierId: "" });
+  setForm({ name: "", price: "", stockAvailable: "", manufactureDate: "", expiryDate: "", supplierId: "" });
     setEditingId(null);
   }
 
@@ -72,7 +130,7 @@ export default function Medicines() {
       const e = new Date(form.expiryDate);
       if (m > e) errors.expiryDate = 'Expiry must be after manufacture date.';
     }
-    if (!editingId && (!form.supplierId || !/^[0-9a-fA-F]{24}$/.test(form.supplierId))) errors.supplierId = 'Valid supplier id is required.';
+  if (!editingId && (!form.supplierId || !/^[0-9a-fA-F]{24}$/.test(form.supplierId))) errors.supplierId = 'Valid supplier id is required.';
     setFieldErrors(errors);
     return Object.keys(errors).length === 0 ? null : errors;
   }
@@ -92,11 +150,18 @@ export default function Medicines() {
 
     try {
       if (editingId) {
-        const result = await localApi.updateMedicine(editingId, payload);
+        const res = await axios.put(`https://pharmacy-proj-1.onrender.com/medicine/${editingId}`, payload);
+        const result = res.data?.data || res.data;
         if (result) setMedicines(prev => prev.map(m => m._id === result._id ? result : m));
         resetForm();
       } else {
-        const result = await localApi.createMedicine(form.supplierId, payload);
+        const pharmacyIdToUse = defaultPharmacyId;
+        if (!pharmacyIdToUse) {
+          setError('Please create a Pharmacy first from the Pharmacies page to add medicines.');
+          return;
+        }
+        const res = await axios.post(`https://pharmacy-proj-1.onrender.com/medicine/${pharmacyIdToUse}` , payload);
+        const result = res.data?.data || res.data;
         setMedicines(prev => [result, ...prev]);
         resetForm();
       }
@@ -115,8 +180,8 @@ export default function Medicines() {
       stockAvailable: med.stockAvailable ?? "",
       manufactureDate: med.manufactureDate ? med.manufactureDate.split("T")[0] : "",
       expiryDate: med.expiryDate ? med.expiryDate.split("T")[0] : "",
-      // supplierId is only used when creating a new medicine; keep empty while editing
-      supplierId: "",
+  // supplierId is only used for UI selection when creating; keep empty while editing
+  supplierId: "",
     });
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
@@ -180,14 +245,32 @@ export default function Medicines() {
 
   {/* supplierId only for create --- hidden on edit */}
         {!editingId && (
-          <div className="md:col-span-2">
+          <div className="md:col-span-2 space-y-1">
             {suppliers.length > 0 ? (
-              <select value={form.supplierId} onChange={(e) => setForm({ ...form, supplierId: e.target.value })} className="border p-1 rounded w-full">
-                <option value="">Select supplier...</option>
-                {suppliers.map(s => <option key={s._id} value={s._id}>{s.name} — {s._id}</option>)}
-              </select>
+              <div className="flex gap-2">
+                <select
+                  value={form.supplierId}
+                  onChange={(e) => setForm({ ...form, supplierId: e.target.value })}
+                  className="border p-1 rounded flex-1"
+                >
+                  <option value="">Select supplier...</option>
+                  {suppliers.map(s => (
+                    <option key={s._id} value={s._id}>{s.name}</option>
+                  ))}
+                </select>
+                <button type="button" onClick={fetchSuppliersList} className="px-2 py-1 border rounded text-sm">Refresh</button>
+              </div>
             ) : (
-              <input type="text" placeholder="Supplier Id (required to add)" value={form.supplierId} onChange={(e) => setForm({ ...form, supplierId: e.target.value })} className="border p-1 rounded w-full" />
+              <input
+                type="text"
+                placeholder="Supplier Id (select after registering supplier)"
+                value={form.supplierId}
+                onChange={(e) => setForm({ ...form, supplierId: e.target.value })}
+                className="border p-1 rounded w-full"
+              />
+            )}
+            {form.supplierId && (
+              <div className="text-xs text-gray-600 break-all">Selected Supplier ID: {form.supplierId} <button type="button" className="ml-2 underline" onClick={() => navigator.clipboard?.writeText(form.supplierId)}>Copy</button></div>
             )}
             {fieldErrors.supplierId && <div className="text-red-600 text-sm">{fieldErrors.supplierId}</div>}
           </div>
@@ -240,6 +323,47 @@ export default function Medicines() {
             )}
           </tbody>
         </table>
+      </div>
+
+      {/* Orders table with Supplier column */}
+      <div className="mt-6">
+        <h3 className="font-semibold mb-2">Recent Orders</h3>
+        {ordersLoading && <div className="text-sm text-gray-500">Loading orders…</div>}
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-gray-50">
+              <tr>
+                <th className="p-2 border">Order ID</th>
+                <th className="p-2 border">Supplier</th>
+                <th className="p-2 border">Pharmacy</th>
+                <th className="p-2 border">Status</th>
+                <th className="p-2 border">Date</th>
+                <th className="p-2 border">Items</th>
+              </tr>
+            </thead>
+            <tbody>
+              {orders.map(o => (
+                <tr key={o._id} className="hover:bg-gray-50">
+                  <td className="p-2 border break-all">{o._id}</td>
+                  <td className="p-2 border">{(suppliers.find(s => s._id === o.receivedFrom)?.name) || o.receivedFrom || '-'}</td>
+                  <td className="p-2 border">{o.pharmacy}</td>
+                  <td className="p-2 border">{o.status || o.orderType || '-'}</td>
+                  <td className="p-2 border">{o.orderDate ? new Date(o.orderDate).toLocaleString() : '-'}</td>
+                  <td className="p-2 border">
+                    <ul className="list-disc pl-4">
+                      {o.medicines?.map(mi => <li key={mi.medicine}>{mi.medicine} — {mi.quantity}</li>)}
+                    </ul>
+                  </td>
+                </tr>
+              ))}
+              {orders.length === 0 && (
+                <tr>
+                  <td colSpan={6} className="p-3 text-center text-gray-500">No orders found</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
     </section>
   );

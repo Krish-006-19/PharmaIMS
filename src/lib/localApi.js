@@ -1,163 +1,133 @@
-// Simple localStorage-backed API to replace network fetches for development
-// Data keys
-const KEYS = {
-  medicines: 'pharma_medicines',
-  pharmacies: 'pharma_pharmacies',
-  suppliers: 'pharma_suppliers',
-  orders: 'pharma_orders'
-};
+// Network-backed API client wired to the Render backend
+// Use env var when provided, otherwise:
+// - on localhost, use Vite's dev proxy at /api to avoid CORS
+// - in production, fall back to the deployed backend URL
+const isLocal = typeof window !== 'undefined' && /localhost|127\.0\.0\.1/.test(window.location.host);
+const BASE = (import.meta?.env?.VITE_API_BASE)
+  || (isLocal ? '/api' : 'https://pharmacy-proj-1.onrender.com');
 
-function read(key) {
-  try {
-    const raw = localStorage.getItem(key);
-    return raw ? JSON.parse(raw) : null;
-  } catch (e) { return null; }
+function normalizeId(val) {
+  if (!val) return null;
+  if (typeof val === 'string') return val;
+  if (val && typeof val === 'object' && val._id) return val._id;
+  return val;
 }
 
-function write(key, val) {
-  localStorage.setItem(key, JSON.stringify(val));
+function normalizeOrder(o) {
+  if (!o) return o;
+  const medicines = Array.isArray(o.medicines)
+    ? o.medicines.map(mi => ({ medicine: normalizeId(mi.medicine), quantity: Number(mi.quantity || 0) }))
+    : [];
+  return {
+    ...o,
+    pharmacy: normalizeId(o.pharmacy),
+    receivedFrom: normalizeId(o.receivedFrom),
+    medicines,
+  };
 }
 
-function genId() {
-  // generate 24 hex chars similar to Mongo ObjectId
-  let s = '';
-  const hex = '0123456789abcdef';
-  for (let i = 0; i < 24; i++) s += hex[Math.floor(Math.random() * 16)];
-  return s;
+async function request(path, { method = 'GET', body, headers } = {}) {
+  const finalHeaders = { ...(headers || {}) };
+  // Only set JSON content-type when we actually send a body
+  if (body && method && method.toUpperCase() !== 'GET' && method.toUpperCase() !== 'HEAD') {
+    if (!finalHeaders['Content-Type']) finalHeaders['Content-Type'] = 'application/json';
+  }
+  const res = await fetch(`${BASE}${path}`, {
+    method,
+    headers: finalHeaders,
+    body: body ? JSON.stringify(body) : undefined,
+    mode: 'cors',
+  });
+  let data;
+  try { data = await res.json(); } catch { data = null; }
+  if (!res.ok) {
+    const msg = (data && (data.message || data.error)) || `HTTP ${res.status}`;
+    throw new Error(msg);
+  }
+  return data;
 }
 
-function ensure() {
-  if (!read(KEYS.medicines)) write(KEYS.medicines, []);
-  if (!read(KEYS.pharmacies)) write(KEYS.pharmacies, []);
-  if (!read(KEYS.suppliers)) write(KEYS.suppliers, []);
-  if (!read(KEYS.orders)) write(KEYS.orders, []);
-}
-
-ensure();
-
+// Medicines
 export async function getMedicines() {
-  return Promise.resolve(read(KEYS.medicines) || []);
+  const json = await request('/medicine');
+  const list = Array.isArray(json?.data) ? json.data : (Array.isArray(json) ? json : []);
+  return list;
 }
 
+// ownerId here is pharmacyId as per backend route POST /medicine/:pharmaId
 export async function createMedicine(ownerId, payload) {
-  const medicines = read(KEYS.medicines) || [];
-  const pharmacies = read(KEYS.pharmacies) || [];
-  const suppliers = read(KEYS.suppliers) || [];
-  const _id = genId();
-  const doc = { _id, ...payload };
-  medicines.unshift(doc);
-  write(KEYS.medicines, medicines);
-  // attach to pharmacy if ownerId matches a pharmacy
-  const p = pharmacies.find(p => p._id === ownerId);
-  if (p) {
-    if (!Array.isArray(p.medicine_data)) p.medicine_data = [];
-    p.medicine_data.push(_id);
-    write(KEYS.pharmacies, pharmacies);
-    return Promise.resolve(doc);
-  }
-  // attach to supplier if ownerId matches a supplier
-  const s = suppliers.find(s => s._id === ownerId);
-  if (s) {
-    if (!Array.isArray(s.suppliedMedicines)) s.suppliedMedicines = [];
-    s.suppliedMedicines.push(_id);
-    write(KEYS.suppliers, suppliers);
-    return Promise.resolve(doc);
-  }
-  return Promise.resolve(doc);
+  if (!ownerId) throw new Error('pharmacyId is required to create a medicine');
+  const json = await request(`/medicine/${ownerId}`, { method: 'POST', body: payload });
+  return json?.data || json;
 }
 
 export async function updateMedicine(id, update) {
-  const medicines = read(KEYS.medicines) || [];
-  const idx = medicines.findIndex(m => m._id === id);
-  if (idx === -1) return Promise.resolve(null);
-  medicines[idx] = { ...medicines[idx], ...update };
-  write(KEYS.medicines, medicines);
-  return Promise.resolve(medicines[idx]);
+  if (!id) throw new Error('id required');
+  const json = await request(`/medicine/${id}`, { method: 'PUT', body: update });
+  return json?.data || json;
 }
 
+// Pharmacies
 export async function getPharmacies() {
-  return Promise.resolve(read(KEYS.pharmacies) || []);
+  const json = await request('/pharmacy');
+  return Array.isArray(json?.data) ? json.data : [];
 }
 
 export async function createPharmacy(payload) {
-  const pharmacies = read(KEYS.pharmacies) || [];
-  const _id = genId();
-  const doc = { _id, ...payload, medicine_data: [] };
-  pharmacies.unshift(doc);
-  write(KEYS.pharmacies, pharmacies);
-  return Promise.resolve(doc);
+  const json = await request('/pharmacy', { method: 'POST', body: payload });
+  return json?.data || json;
 }
 
 export async function getPharmacyHistory(pharmacyId) {
-  const orders = read(KEYS.orders) || [];
-  const list = (orders.filter(o => o.pharmacy === pharmacyId) || []).sort((a,b)=>new Date(b.orderDate)-new Date(a.orderDate));
-  return Promise.resolve(list);
+  const json = await request(`/pharmacy/${pharmacyId}/history`);
+  const list = Array.isArray(json?.data) ? json.data : [];
+  return list.map(normalizeOrder);
 }
 
+// Create order for a pharmacy. If payload.receivedFrom is provided, it will hit /order/placeOrder/:pharmacyId/:supplierId
+// Otherwise, it will hit /pharmacy/:id/order to move stock internally.
 export async function placePharmacyOrder(pharmacyId, payload) {
-  const orders = read(KEYS.orders) || [];
-  const _id = genId();
-  const doc = { _id, pharmacy: pharmacyId, receivedFrom: payload.receivedFrom, medicines: payload.medicines, orderType: payload.orderType || 'supplierRequest', status: 'pending', orderDate: new Date().toISOString() };
-  orders.unshift(doc);
-  write(KEYS.orders, orders);
-  return Promise.resolve(doc);
+  if (!pharmacyId) throw new Error('pharmacyId required');
+  const { receivedFrom, medicines } = payload || {};
+  if (!Array.isArray(medicines) || medicines.length === 0) throw new Error('medicines array required');
+  if (receivedFrom) {
+    const json = await request(`/order/placeOrder/${pharmacyId}/${receivedFrom}`, { method: 'POST', body: { medicines } });
+    return normalizeOrder(json?.data || json);
+  }
+  const json = await request(`/pharmacy/${pharmacyId}/order`, { method: 'POST', body: { medicines } });
+  return normalizeOrder(json?.data || json);
 }
 
+// Suppliers
 export async function getSuppliers() {
-  return Promise.resolve(read(KEYS.suppliers) || []);
+  const json = await request('/supplier');
+  return Array.isArray(json?.data) ? json.data : [];
 }
 
 export async function createSupplier(payload) {
-  const suppliers = read(KEYS.suppliers) || [];
-  const _id = genId();
-  const doc = { _id, ...payload };
-  suppliers.unshift(doc);
-  write(KEYS.suppliers, suppliers);
-  return Promise.resolve(doc);
+  const json = await request('/supplier', { method: 'POST', body: payload });
+  return json?.data || json;
 }
 
 export async function getSupplierById(id) {
-  const suppliers = read(KEYS.suppliers) || [];
-  return Promise.resolve(suppliers.find(s => s._id === id) || null);
+  const json = await request(`/supplier/${id}`);
+  return json?.data || json;
 }
 
 export async function getSupplierHistory(supplierId) {
-  const orders = read(KEYS.orders) || [];
-  const list = (orders.filter(o => o.receivedFrom === supplierId) || []).sort((a,b)=>new Date(b.orderDate)-new Date(a.orderDate));
-  return Promise.resolve(list);
+  const json = await request(`/supplier/${supplierId}/history`);
+  const list = Array.isArray(json?.data) ? json.data : [];
+  return list.map(normalizeOrder);
 }
 
 export async function processSupplierOrder(supplierId, { orderId, action, reason }) {
-  const orders = read(KEYS.orders) || [];
-  const medicines = read(KEYS.medicines) || [];
-  const idx = orders.findIndex(o => o._id === orderId);
-  if (idx === -1) return Promise.reject(new Error('Order not found'));
-  const order = orders[idx];
-  if (order.receivedFrom && order.receivedFrom !== supplierId) return Promise.reject(new Error('Not authorized'));
-  if (order.status && order.status !== 'pending') return Promise.reject(new Error('Order already processed'));
-  if (action === 'reject') {
-    order.status = 'rejected';
-    order.rejectionReason = reason || '';
-    order.orderType = 'supplierRejected';
-    orders[idx] = order;
-    write(KEYS.orders, orders);
-    return Promise.resolve(order);
-  }
-  // accept
-  for (const item of order.medicines || []) {
-    const m = medicines.find(mm => mm._id === item.medicine);
-    if (m) {
-      m.stockAvailable = (m.stockAvailable || 0) + Number(item.quantity || 0);
-    }
-  }
-  order.status = 'confirmed';
-  order.orderType = 'supplierConfirmed';
-  orders[idx] = order;
-  write(KEYS.orders, orders);
-  write(KEYS.medicines, medicines);
-  return Promise.resolve(order);
+  const json = await request(`/supplier/${supplierId}/order`, { method: 'PUT', body: { orderId, action, reason } });
+  return normalizeOrder(json?.data || json);
 }
 
+// Orders
 export async function getOrders() {
-  return Promise.resolve(read(KEYS.orders) || []);
+  const json = await request('/order');
+  const list = Array.isArray(json?.orders) ? json.orders : (Array.isArray(json?.data) ? json.data : []);
+  return list.map(normalizeOrder);
 }

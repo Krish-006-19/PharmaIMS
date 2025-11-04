@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
-import * as localApi from '../lib/localApi';
+import axios from 'axios';
+import { demo } from '../lib/demoData';
 
 export default function Suppliers() {
   const [suppliers, setSuppliers] = useState([]);
@@ -13,8 +14,6 @@ export default function Suppliers() {
     address: { street: "", city: "", state: "", pincode: "" },
   });
   const [fieldErrors, setFieldErrors] = useState({});
-  const [selectedSupplierOrders, setSelectedSupplierOrders] = useState([]);
-  const [ordersLoading, setOrdersLoading] = useState(false);
   const [orderAction, setOrderAction] = useState({ orderId: null, action: null, reason: '' });
   const [expandedSuppliers, setExpandedSuppliers] = useState({});
 
@@ -22,15 +21,31 @@ export default function Suppliers() {
     fetchSuppliers();
   }, []);
 
+  // Refresh expanded supplier orders when a new order is placed
+  useEffect(() => {
+    function onPlaced(e) {
+      const sid = e?.detail?.supplierId;
+      if (sid && expandedSuppliers[sid] !== undefined) {
+        fetchSupplierOrders(sid);
+      }
+    }
+    window.addEventListener('order:placed', onPlaced);
+    return () => window.removeEventListener('order:placed', onPlaced);
+  }, [expandedSuppliers]);
+
   async function fetchSuppliers() {
     setLoading(true);
     setError("");
     try {
-      const data = await localApi.getSuppliers();
-      setSuppliers(data || []);
+      const res = await axios.get('https://pharmacy-proj-1.onrender.com/supplier');
+      setSuppliers(res.data?.data || []);
     } catch (err) {
-      console.error(err);
-      setError("Could not load suppliers");
+      if (err?.response?.status === 404) {
+        setSuppliers(demo.suppliers);
+      } else {
+        console.error(err);
+        setError("Could not load suppliers");
+      }
     } finally {
       setLoading(false);
     }
@@ -54,8 +69,9 @@ export default function Suppliers() {
     if (v) return setError('Please fix form errors');
     setError("");
     try {
-      const payload = await localApi.createSupplier(form);
-      setSuppliers((p) => [payload, ...p]);
+      const res = await axios.post('https://pharmacy-proj-1.onrender.com/supplier', form);
+      const created = res.data?.data || res.data;
+      setSuppliers((p) => [created, ...p]);
       resetForm();
       setFieldErrors({});
     } catch (err) {
@@ -65,23 +81,32 @@ export default function Suppliers() {
   }
 
   async function fetchSupplierOrders(supplierId) {
-    setOrdersLoading(true);
     try {
-      const payload = await localApi.getSupplierHistory(supplierId);
-      setSelectedSupplierOrders(payload || []);
-      setExpandedSuppliers(prev => ({ ...prev, [supplierId]: payload || [] }));
+      const res = await axios.get(`https://pharmacy-proj-1.onrender.com/supplier/${supplierId}/history`);
+      const list = Array.isArray(res.data?.data) ? res.data.data : [];
+      const flat = list.map(o => ({
+        ...o,
+        pharmacy: typeof o.pharmacy === 'object' ? o.pharmacy?._id : o.pharmacy,
+        receivedFrom: typeof o.receivedFrom === 'object' ? o.receivedFrom?._id : o.receivedFrom,
+        medicines: (o.medicines||[]).map(mi => ({ medicine: typeof mi.medicine === 'object' ? mi.medicine?._id : mi.medicine, quantity: mi.quantity }))
+      }));
+      setExpandedSuppliers(prev => ({ ...prev, [supplierId]: flat || [] }));
     } catch (err) {
-      console.error(err);
-      setSelectedSupplierOrders([]);
-      setExpandedSuppliers(prev => ({ ...prev, [supplierId]: [] }));
-    } finally { setOrdersLoading(false); }
+      if (err?.response?.status === 404) {
+        const flat = (demo.orders || []).filter(o => o.receivedFrom === supplierId);
+        setExpandedSuppliers(prev => ({ ...prev, [supplierId]: flat }));
+      } else {
+        console.error(err);
+        setExpandedSuppliers(prev => ({ ...prev, [supplierId]: [] }));
+      }
+    }
   }
 
   async function processOrder() {
     const { orderId, action, reason } = orderAction;
     if (!orderId || !['accept','reject'].includes(action)) return alert('Invalid action');
     try {
-      const payload = await localApi.processSupplierOrder(orderAction.supplierId, { orderId, action: action === 'accept' ? 'accept' : 'reject', reason });
+      await axios.put(`https://pharmacy-proj-1.onrender.com/supplier/${orderAction.supplierId}/order`, { orderId, action: action === 'accept' ? 'accept' : 'reject', reason });
       alert('Done');
       // refresh
       fetchSuppliers();
@@ -135,7 +160,7 @@ export default function Suppliers() {
               </div>
               <div className="flex gap-2">
                 <button onClick={() => navigator.clipboard?.writeText(s._id)} className="px-2 py-1 border rounded text-sm">Copy ID</button>
-                <button onClick={async () => { try { const payload = await localApi.getSupplierById(s._id); if (!payload) throw new Error('Failed to fetch'); alert(JSON.stringify(payload, null, 2)); } catch (err) { console.error(err); alert('Could not fetch supplier details'); } }} className="px-2 py-1 border rounded text-sm">View</button>
+                <button onClick={async () => { try { const res = await axios.get(`https://pharmacy-proj-1.onrender.com/supplier/${s._id}`); const payload = res.data?.data || res.data; if (!payload) throw new Error('Failed to fetch'); alert(JSON.stringify(payload, null, 2)); } catch (err) { console.error(err); alert('Could not fetch supplier details'); } }} className="px-2 py-1 border rounded text-sm">View</button>
                 <button onClick={() => {
                     // toggle
                     if (expandedSuppliers[s._id]) {
