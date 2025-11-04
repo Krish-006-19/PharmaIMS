@@ -276,7 +276,7 @@ export default function Medicines() {
           </div>
         )}
 
-        <div className="md:col-span-2 flex gap-2">
+        <div className="md:col-span-2 ml-6 flex gap-2">
           <button onClick={handleSubmit} disabled={Boolean(Object.keys(fieldErrors).length)} className="bg-blue-600 text-white px-3 py-1 rounded disabled:opacity-60">
             {editingId ? "Save changes" : "+ Add"}
           </button>
