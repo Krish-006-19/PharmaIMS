@@ -2,18 +2,11 @@ import React, { useEffect, useState } from 'react';
 import axios from 'axios';
 import { demo } from '../lib/demoData';
 
-// Pharmacies UI — replaces former Customers page
-// - list pharmacies (GET /api/pharmacies)
-// - create pharmacy (POST /api/pharmacies)
-// - place demand/order to supplier (POST /api/pharmacies/:id/order)
-
 export default function Pharmacies() {
   const [pharmacies, setPharmacies] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  // Schema-aligned pharmacy form
-  // address is a required string (not an object)
   const [form, setForm] = useState({
     name: '',
     phone: '',
@@ -21,11 +14,10 @@ export default function Pharmacies() {
   });
   const [fieldErrors, setFieldErrors] = useState({});
 
-  // order modal state
   const [orderModal, setOrderModal] = useState({ open: false, pharmacyId: null });
   const [suppliers, setSuppliers] = useState([]);
   const [medicines, setMedicines] = useState([]);
-  const [orderRows, setOrderRows] = useState([]); // { medicine: id, quantity }
+  const [orderRows, setOrderRows] = useState([]); 
   const [selectedSupplier, setSelectedSupplier] = useState('');
   const [placingOrder, setPlacingOrder] = useState(false);
   const [pharmacyHistory, setPharmacyHistory] = useState([]);
@@ -106,19 +98,16 @@ export default function Pharmacies() {
     setPlacingOrder(true);
     try {
       const payload = { medicines: orderRows.map(r => ({ medicine: r.medicine, quantity: Number(r.quantity) })) };
-      // supplier present -> use /order/placeOrder/:pharmacyId/:supplierId
       if (selectedSupplier) {
         await axios.post(`https://pharmacy-proj-1.onrender.com/order/placeOrder/${orderModal.pharmacyId}/${selectedSupplier}`, payload);
       } else {
         await axios.post(`https://pharmacy-proj-1.onrender.com/pharmacy/${orderModal.pharmacyId}/order`, payload);
       }
       alert('Order placed');
-      // broadcast to other pages so they can refresh views
       try {
         window.dispatchEvent(new CustomEvent('order:placed', { detail: { pharmacyId: orderModal.pharmacyId, supplierId: selectedSupplier || null } }));
       } catch {}
       setOrderModal({ open: false, pharmacyId: null });
-      // refresh history for this pharmacy if visible
       if (orderModal.pharmacyId) fetchPharmacyHistory(orderModal.pharmacyId);
     } catch (err) { console.error(err); alert(err.message || 'Server error'); }
     finally { setPlacingOrder(false); }
@@ -131,7 +120,6 @@ export default function Pharmacies() {
     try {
       const res = await axios.get(`https://pharmacy-proj-1.onrender.com/pharmacy/${pharmacyId}/history`);
       const list = Array.isArray(res.data?.data) ? res.data.data : [];
-      // flatten ids in case server populates
       const flat = list.map(o => ({
         ...o,
         pharmacy: typeof o.pharmacy === 'object' ? o.pharmacy?._id : o.pharmacy,
@@ -174,7 +162,6 @@ export default function Pharmacies() {
           <button onClick={createPharmacy} className="bg-blue-600 text-white px-3 py-1 rounded">+ Add</button>
           <button onClick={() => setForm({ name: '', phone: '', address: '' })} className="border px-3 py-1 rounded">Clear</button>
         </div>
-        {/* Schema-aligned single address field */}
         <div className="md:col-span-4">
           <input className="border p-1 rounded w-full" placeholder="Address (single line)" value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} />
           {fieldErrors.address && <div className="text-red-600 text-sm">{fieldErrors.address}</div>}
@@ -200,7 +187,6 @@ export default function Pharmacies() {
         </ul>
       </div>
 
-      {/* Order modal (simple inline panel) */}
       {orderModal.open && (
         <div className="fixed inset-0 bg-black/40 flex items-start justify-center p-6">
           <div className="bg-white rounded-lg shadow p-4 w-full max-w-2xl">
@@ -239,7 +225,6 @@ export default function Pharmacies() {
         </div>
       )}
 
-      {/* Pharmacy History table */}
       <div className="mt-6">
         <h3 className="font-semibold mb-2">Pharmacy Order History</h3>
         {historyLoading && <div>Loading history...</div>}
