@@ -21,7 +21,6 @@ export default function Suppliers() {
     fetchSuppliers();
   }, []);
 
-  // Refresh expanded supplier orders when a new order is placed
   useEffect(() => {
     function onPlaced(e) {
       const sid = e?.detail?.supplierId;
@@ -108,7 +107,6 @@ export default function Suppliers() {
     try {
       await axios.put(`https://pharmacy-proj-1.onrender.com/supplier/${orderAction.supplierId}/order`, { orderId, action: action === 'accept' ? 'accept' : 'reject', reason });
       alert('Done');
-      // refresh
       fetchSuppliers();
       if (orderAction.supplierId) fetchSupplierOrders(orderAction.supplierId);
       setOrderAction({ orderId: null, action: null, reason: '' });
@@ -177,7 +175,6 @@ export default function Suppliers() {
         </ul>
       </div>
 
-      {/* Render expanded supplier order tables inline */}
       <div className="mt-6 space-y-4">
         {Object.keys(expandedSuppliers).map(sid => {
           const orders = expandedSuppliers[sid] || [];
