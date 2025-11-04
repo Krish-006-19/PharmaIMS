@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
-import { demo } from '../lib/demoData';
 
 export default function Pharmacies() {
   const [pharmacies, setPharmacies] = useState([]);
@@ -34,7 +33,7 @@ export default function Pharmacies() {
       setPharmacies(res.data?.data || []);
     } catch (err) {
       if (err?.response?.status === 404) {
-        setPharmacies(demo.pharmacies);
+        setPharmacies([]);
       } else {
         console.error(err);
         setError('Could not load pharmacies');
@@ -43,11 +42,11 @@ export default function Pharmacies() {
   }
 
   async function fetchSuppliers() {
-    try { const res = await axios.get('https://pharmacy-proj-1.onrender.com/supplier'); setSuppliers(res.data?.data || []); } catch (err) { if (err?.response?.status === 404) setSuppliers(demo.suppliers); else console.warn('Failed to load suppliers', err); }
+    try { const res = await axios.get('https://pharmacy-proj-1.onrender.com/supplier'); setSuppliers(res.data?.data || []); } catch (err) { if (err?.response?.status === 404) setSuppliers([]); else console.warn('Failed to load suppliers', err); }
   }
 
   async function fetchMedicines() {
-    try { const res = await axios.get('https://pharmacy-proj-1.onrender.com/medicine'); const list = Array.isArray(res.data?.data) ? res.data.data : (Array.isArray(res.data) ? res.data : []); setMedicines(list || []); } catch (err) { if (err?.response?.status === 404) setMedicines(demo.medicines); else console.warn('Failed to load medicines', err); }
+    try { const res = await axios.get('https://pharmacy-proj-1.onrender.com/medicine'); const list = Array.isArray(res.data?.data) ? res.data.data : (Array.isArray(res.data) ? res.data : []); setMedicines(list || []); } catch (err) { if (err?.response?.status === 404) setMedicines([]); else console.warn('Failed to load medicines', err); }
   }
 
   function validateForm() {
@@ -129,8 +128,8 @@ export default function Pharmacies() {
       setPharmacyHistory(flat || []);
     } catch (err) {
       if (err?.response?.status === 404) {
-        const flat = (demo.orders || []).filter(o => o.pharmacy === pharmacyId);
-        setPharmacyHistory(flat);
+        // No demo fallback: set empty history when API is unavailable
+        setPharmacyHistory([]);
       } else {
         console.error(err);
         setPharmacyHistory([]);

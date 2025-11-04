@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from "react";
 import axios from 'axios';
-import { demo } from '../lib/demoData';
 import { Bar } from "react-chartjs-2";
 import {
   Chart as ChartJS,
@@ -43,9 +42,10 @@ export default function Sales() {
       const medicinesRaw = Array.isArray(mRes.data?.data) ? mRes.data.data : (Array.isArray(mRes.data) ? mRes.data : []);
       setMedicines(medicinesRaw || []);
     } catch (err) {
-      console.warn('Failed to load suppliers/medicines, using demo if available', err);
-      if (!suppliers?.length && demo?.suppliers) setSuppliers(demo.suppliers);
-      if (!medicines?.length && demo?.medicines) setMedicines(demo.medicines);
+      console.warn('Failed to load suppliers/medicines', err);
+      // No demo fallback — keep empty lists so real API data is used when available
+      if (!suppliers?.length) setSuppliers([]);
+      if (!medicines?.length) setMedicines([]);
     } finally {
       fetchOrders("");
     }
@@ -76,8 +76,8 @@ export default function Sales() {
       }
     } catch (err) {
       if (err?.response?.status === 404) {
-        ordersRaw = Array.isArray(demo?.orders) ? demo.orders : [];
-        if (id) ordersRaw = ordersRaw.filter(o => o.pharmacy === id);
+        // No demo fallback — show empty orders when API is unavailable
+        ordersRaw = [];
       } else {
         console.error(err);
         setError('Could not load orders');

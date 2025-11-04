@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from "react";
 import axios from 'axios';
-import { demo } from '../lib/demoData';
 
 export default function Suppliers() {
   const [suppliers, setSuppliers] = useState([]);
@@ -39,9 +38,9 @@ export default function Suppliers() {
       const res = await axios.get('https://pharmacy-proj-1.onrender.com/supplier');
       setSuppliers(res.data?.data || []);
     } catch (err) {
-      if (err?.response?.status === 404) {
-        setSuppliers(demo.suppliers);
-      } else {
+        if (err?.response?.status === 404) {
+          setSuppliers([]);
+        } else {
         console.error(err);
         setError("Could not load suppliers");
       }
@@ -91,13 +90,13 @@ export default function Suppliers() {
       }));
       setExpandedSuppliers(prev => ({ ...prev, [supplierId]: flat || [] }));
     } catch (err) {
-      if (err?.response?.status === 404) {
-        const flat = (demo.orders || []).filter(o => o.receivedFrom === supplierId);
-        setExpandedSuppliers(prev => ({ ...prev, [supplierId]: flat }));
-      } else {
-        console.error(err);
-        setExpandedSuppliers(prev => ({ ...prev, [supplierId]: [] }));
-      }
+        if (err?.response?.status === 404) {
+          // No demo fallback: set empty order list when API is unavailable
+          setExpandedSuppliers(prev => ({ ...prev, [supplierId]: [] }));
+        } else {
+          console.error(err);
+          setExpandedSuppliers(prev => ({ ...prev, [supplierId]: [] }));
+        }
     }
   }
 

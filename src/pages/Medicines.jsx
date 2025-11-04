@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from "react";
 import axios from 'axios';
-import { demo } from '../lib/demoData';
 
 export default function Medicines() {
   const [medicines, setMedicines] = useState([]);
@@ -37,7 +36,8 @@ export default function Medicines() {
       setMedicines(data || []);
     } catch (err) {
       if (err?.response?.status === 404) {
-        setMedicines(demo.medicines);
+        // No demo fallback — rely on real API data. Use empty list instead.
+        setMedicines([]);
       } else {
         console.error(err);
         setError("Could not load medicines");
@@ -52,7 +52,7 @@ export default function Medicines() {
       const res = await axios.get('https://pharmacy-proj-1.onrender.com/supplier');
       setSuppliers(res.data?.data || []);
     } catch (err) {
-      if (err?.response?.status === 404) setSuppliers(demo.suppliers); else console.warn('Could not load suppliers for selection', err);
+      if (err?.response?.status === 404) setSuppliers([]); else console.warn('Could not load suppliers for selection', err);
     }
   }
 
@@ -62,8 +62,9 @@ export default function Medicines() {
       const list = res.data?.data || [];
       if (list.length > 0) setDefaultPharmacyId(list[0]._id);
     } catch (err) {
+      // If API fails, leave default pharmacy unset. No demo fallback.
       if (err?.response?.status === 404) {
-        if ((demo.pharmacies || []).length > 0) setDefaultPharmacyId(demo.pharmacies[0]._id);
+        // no-op
       } else {
         console.warn('Could not determine default pharmacy', err);
       }
@@ -94,7 +95,7 @@ export default function Medicines() {
       setOrders(flat);
     } catch (err) {
       if (err?.response?.status === 404) {
-        setOrders(demo.orders || []);
+        setOrders([]);
       } else {
         console.warn('Failed to load orders', err);
         setOrders([]);
